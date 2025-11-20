@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id           String   @id @default(uuid())
+  phone_number String   @unique
+  name         String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  chat Chat?
+
+  @@index([phone_number])
+}
+
+model Chat {
+  id              String   @id @default(uuid())
+  customer_id     String   @unique
+  phone_number    String   @unique
+  message_history Json     @default("[]")
+  last_message_at DateTime @default(now())
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  customer Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+
+  @@index([phone_number])
+  @@index([last_message_at])
+}
