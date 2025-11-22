@@ -235,6 +235,24 @@ export class WhatsappService {
         this.logger.warn(`⚠️ Failed to convert LID ${to}, using original`);
       }
     }
+        // 🔓 Human command: end escalation for this chat
+    if (fromMe) {
+      const normalized = (body || '').trim().toLowerCase();
+      if (normalized === 'endescalate') {
+        // finalTo adalah nomor customer untuk outgoing
+        await this.messageOrchestratorService.clearEscalation(
+          finalTo,
+          event.session,
+        );
+
+        this.logger.log(
+          `🔓 Received 'endescalate' from operator. AI re-enabled for ${finalTo} (${event.session})`,
+        );
+        // Tidak perlu return; pesan "endescalate" tetap disimpan sebagai log,
+        // dan memang tidak akan memicu AI karena fromMe = true.
+      }
+    }
+
 
     let textBody = body || '';
     // ============================

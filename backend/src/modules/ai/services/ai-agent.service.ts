@@ -93,7 +93,51 @@ Please respond to the last message from the user in Bahasa Indonesia.`;
       throw error;
     }
   }
+  async generateResponseWithEscalation(
+    conversationHistory: ChatMessage[],
+    options?: AIGenerateOptions,
+  ): Promise<{ text: string; escalate: boolean }> {
+    const rawText = await this.generateResponse(conversationHistory, options);
 
+    const escalate = this.shouldEscalate(rawText);
+    const cleanText = this.stripEscalationMarker(rawText);
+
+    this.logger.log(
+      `🤖 Escalation check: escalate=${escalate ? 'YES' : 'NO'} (len=${cleanText.length})`,
+    );
+
+    return { text: cleanText, escalate };
+  }
+
+  /**
+   * Deteksi apakah perlu eskalasi dari output model.
+   */
+  private shouldEscalate(text: string): boolean {
+    if (!text) return false;
+
+    // utama: cek tag eksplisit
+    if (text.includes('[[ESCALATE_TO_HUMAN]]')) return true;
+
+    // cadangan: pola kalimat "tidak tahu"
+    const lower = text.toLowerCase();
+    const patterns = [
+      'saya tidak memiliki cukup informasi',
+      'saya tidak dapat memberikan informasi yang pasti',
+      'sebaiknya hubungi kantor bpjs',
+      'silakan hubungi care center',
+      'perlu dicek langsung di kantor bpjs',
+      'sebaiknya ditangani langsung oleh petugas',
+    ];
+
+    return patterns.some((p) => lower.includes(p));
+  }
+
+  /**
+   * Bersihin tag eskalasi supaya user tidak melihat token mentah.
+   */
+  private stripEscalationMarker(text: string): string {
+    return text.replace('[[ESCALATE_TO_HUMAN]]', '').trim();
+  }
   /**
    * Format chat history for prompt
    */
@@ -101,10 +145,28 @@ Please respond to the last message from the user in Bahasa Indonesia.`;
     return history
       .map((msg) => {
         const role = msg.fromMe ? 'Assistant' : 'Customer';
-        return `${role}: ${msg.body || '(no text)'}`;
+
+        // Not all ChatMessage fields are declared, so be a bit defensive
+        const anyMsg = msg as any;
+        const hasMedia: boolean | undefined = anyMsg.hasMedia;
+        const mediaType: string | undefined = anyMsg.mediaType;
+
+        const isVoice =
+          !!hasMedia &&
+          typeof mediaType === 'string' &&
+          mediaType.startsWith('audio/');
+
+        // You can label only voice, or both:
+        // - voice: "Customer (voice): ..."
+        // - text:  "Customer (text): ..."
+        const sourceLabel = isVoice ? 'voice message' : 'text message';
+
+        // Example: "Customer (voice message): halo tadi saya kirim voice note..."
+        return `${role} (${sourceLabel}): ${msg.body || '(no text)'}`;
       })
       .join('\n');
   }
+
 
   /**
    * Get default system prompt for the AI agent
@@ -127,7 +189,7 @@ Ringkas saja, misalnya:
 •	Pendaftaran dan perubahan data peserta
 •	Cek status kepesertaan
 •	Iuran, denda, dan tunggakan
-•	Faskes dan rujukan
+•	Faskes dan rujukan (Apabila lokasi kurang jelas atau detail minta untuk memberikan lokasi detail)
 •	Klaim dan layanan di FKTP/FKRTL
 •	JKN Mobile dan administrasi online
 Jangan langsung jelasin panjang; tunggu ditanya lanjutannya.
@@ -157,7 +219,20 @@ User: “Pindah faskes bisa langsung hari ini?”
 → “Bisa asal belum pindah dalam 3 bulan terakhir. Prosesnya lewat Mobile JKN.”
 DISKLAIMER
 Hanya digunakan kalau peserta mau proses administrasi:
-“Disclaimer: pengecekan berdasarkan data sistem. Untuk kepastian layanan medis mengikuti kebijakan faskes.”
+“Disclaimer: pengecekan berdasarkan data sistem. Untuk kepastian layanan medis mengikuti kebijakan faskes.
+KEBIJAKAN ESKALASI KE PETUGAS MANUSIA
+Jika pertanyaan:
+• di luar cakupan informasi BPJS di atas,
+• terlalu spesifik ke kasus individu yang butuh akses sistem internal,
+• atau kamu TIDAK YAKIN dengan jawabannya,
+
+MAKA:
+1) Jawab singkat bahwa kasusnya perlu dicek petugas manusia.
+2) Tambahkan TAG berikut PERSIS di akhir jawaban:
+
+[[ESCALATE_TO_HUMAN]]
+
+Jangan gunakan tag itu untuk pertanyaan biasa yang masih dapat kamu jawab dengan yakin.”
 `;
   }
 
@@ -249,6 +324,7 @@ Hanya digunakan kalau peserta mau proses administrasi:
       });
 
       const text = response.text || '';
+      this.logger.debug(`transcribed : ${text}`);
       this.logger.debug(
         `📝 Audio transcription generated (${text.length} chars, mimeType=${mimeType})`,
       );

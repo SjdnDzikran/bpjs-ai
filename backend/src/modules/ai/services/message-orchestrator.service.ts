@@ -15,6 +15,36 @@ export class MessageOrchestratorService {
   private readonly logger = new Logger(MessageOrchestratorService.name);
   private readonly pendingMessageTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private readonly activeProcessIds: Map<string, string> = new Map();
+    private readonly escalatedConversations = new Map<string, boolean>();
+
+  private makeEscalationKey(phoneNumber: string, session: string): string {
+    return `${session}:${phoneNumber}`;
+  }
+
+  private isConversationEscalated(phoneNumber: string, session: string): boolean {
+    const key = this.makeEscalationKey(phoneNumber, session);
+    return this.escalatedConversations.get(key) === true;
+  }
+
+  private setConversationEscalated(
+    phoneNumber: string,
+    session: string,
+    value: boolean,
+  ): void {
+    const key = this.makeEscalationKey(phoneNumber, session);
+    if (value) {
+      this.escalatedConversations.set(key, true);
+      this.logger.log(`🚩 Conversation escalated: ${key}`);
+    } else {
+      this.escalatedConversations.delete(key);
+      this.logger.log(`✅ Conversation de-escalated: ${key}`);
+    }
+  }
+
+  // Akan dipanggil dari WhatsappService saat human kirim "endescalate"
+  async clearEscalation(phoneNumber: string, session: string): Promise<void> {
+    this.setConversationEscalated(phoneNumber, session, false);
+  }
 
   constructor(
     private readonly chatService: ChatService,
@@ -49,6 +79,14 @@ export class MessageOrchestratorService {
       }
 
       this.logger.log(`📨 Message received from ${phoneNumber}`);
+
+      // 🔒 Jika sedang eskalasi ke petugas manusia, AI diam
+      if (this.isConversationEscalated(phoneNumber, session)) {
+        this.logger.log(
+          `🤝 Conversation is escalated to human, AI is paused for ${phoneNumber} (${session})`,
+        );
+        return;
+      }
 
       // Skip AI response if requested (e.g., for media messages)
       if (config.skipAiResponse) {
@@ -113,19 +151,42 @@ export class MessageOrchestratorService {
             if (config.showTypingIndicator !== false) {
               await this.stopTyping(phoneNumber, session);
             }
-            await this.sendResponse(phoneNumber, 'Halo! Ada yang bisa saya bantu?', session);
+            await this.sendResponse(
+              phoneNumber,
+              'Halo! Ada yang bisa saya bantu?',
+              session,
+            );
             return;
           }
 
-          // Generate AI response
-          const aiResponse = await this.aiAgentService.generateResponse(history);
-          this.logger.log(`✅ Generated response (${aiResponse.length} chars, ${history.length} msgs in context)`);
+          // Generate AI response + cek apakah perlu eskalasi
+          const { text: aiResponse, escalate } =
+            await this.aiAgentService.generateResponseWithEscalation(history);
+
+          this.logger.log(
+            `✅ Generated response (${aiResponse.length} chars, ${history.length} msgs in context, escalate=${escalate})`,
+          );
           
-          // Stop typing before sending response
+          // Stop typing before mengirim apapun
           if (config.showTypingIndicator !== false) {
             await this.stopTyping(phoneNumber, session);
           }
+
+          if (escalate) {
+            // 1) tandai percakapan sedang di-escalate
+            this.setConversationEscalated(phoneNumber, session, true);
+
+            // 2) kirim notifikasi ke CS manusia
+            await this.notifyHumanAgent(phoneNumber, session, history);
+
+            // 3) JANGAN kirim jawaban AI ke user
+            this.logger.log(
+              `🙊 Escalated: skipping AI reply to user ${phoneNumber} (${session})`,
+            );
+            return;
+          }
           
+          // Kalau tidak eskalasi → kirim jawaban AI seperti biasa
           await this.sendResponse(phoneNumber, aiResponse, session);
         } catch (error) {
           this.logger.error(`❌ Failed to process message:`, error.stack);
@@ -197,6 +258,52 @@ export class MessageOrchestratorService {
       throw error;
     }
   }
+    /**
+   * Kirim notifikasi eskalasi ke CS manusia.
+   */
+  private async notifyHumanAgent(
+    customerPhone: string,
+    session: string,
+    history: any[],
+  ): Promise<void> {
+    const csChatId = process.env.HUMAN_CS_WHATSAPP_ID || '';
+
+    if (!csChatId) {
+      this.logger.warn(
+        '⚠️ HUMAN_CS_WHATSAPP_ID tidak diset, eskalasi ke manusia di-skip',
+      );
+      return;
+    }
+
+    const lastUserMsg =
+      [...history].reverse().find((m: any) => !m.fromMe)?.body ||
+      '(tidak ada teks pengguna)';
+
+    const text =
+      `🚨 *Escalation to Human CS*\n\n` +
+      `*Customer*: ${customerPhone}\n` +
+      `*Session*: ${session}\n\n` +
+      `*Last user message:*\n${lastUserMsg}\n\n` +
+      `_AI menandai kasus ini perlu ditindaklanjuti oleh petugas manusia._`;
+
+    try {
+      await this.wahaApiService.sendText({
+        chatId: csChatId,
+        text,
+        session,
+      });
+      this.logger.log(
+        `📣 Escalation alert sent to human CS (${csChatId}) for ${customerPhone}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `❌ Failed to send escalation alert to human CS: ${
+          error?.message || error
+        }`,
+      );
+    }
+  }
+
 
   /**
    * Send error response to user
