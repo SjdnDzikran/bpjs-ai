@@ -234,11 +234,38 @@ export class WahaApiService {
       return false;
     }
   }
+  async downloadMedia(mediaUrl: string): Promise<Buffer> {
+    try {
+      // If WAHA gives full URL like "http://localhost:3000/api/files/..."
+      // we strip the host and only use the path so we can hit WAHA_API_URL instead.
+      let pathOrUrl = mediaUrl;
 
+      if (/^https?:\/\//i.test(mediaUrl)) {
+        const url = new URL(mediaUrl);
+        pathOrUrl = url.pathname + url.search; // e.g. "/api/files/default/false_....oga"
+      }
+
+      this.logger.debug(`⬇️ Downloading media from WAHA: ${pathOrUrl}`);
+
+      const response = await this.client.get<ArrayBuffer>(pathOrUrl, {
+        responseType: 'arraybuffer',
+      });
+
+      this.logger.debug(
+        `✅ Media downloaded (${(response.data as ArrayBuffer).byteLength} bytes)`,
+      );
+
+      return Buffer.from(response.data);
+    } catch (error) {
+      this.handleError('downloadMedia', error);
+      throw error;
+    }
+  }
   /**
    * Get phone number by LID
    * Converts LID (@lid) to real phone number (@c.us)
    */
+  
   async getPhoneNumberByLid(lid: string, session?: string): Promise<string | null> {
     try {
       const sessionName = session || this.defaultSession;

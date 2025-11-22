@@ -15,6 +15,8 @@ import { WahaApiService } from './waha-api.service';
 import { ChatService } from '../../chat/services/chat.service';
 import { MessageOrchestratorService } from '../../ai/services/message-orchestrator.service';
 
+import { AiAgentService } from '../../ai/services/ai-agent.service';
+
 @Injectable()
 export class WhatsappService {
   private readonly logger = new Logger(WhatsappService.name);
@@ -25,6 +27,7 @@ export class WhatsappService {
     private readonly wahaApiService: WahaApiService,
     private readonly chatService: ChatService,
     private readonly messageOrchestratorService: MessageOrchestratorService,
+    private readonly aiAgentService: AiAgentService,
   ) {}
 
   async handleWebhook(
@@ -190,7 +193,7 @@ export class WhatsappService {
     await this.messageOrchestratorService.processIncomingMessage(
       finalFrom,
       event.session,
-      { skipAiResponse: hasMedia },
+      //{ skipAiResponse: false },
     );
   }
 
@@ -233,6 +236,49 @@ export class WhatsappService {
       }
     }
 
+    let textBody = body || '';
+    // ============================
+    // 🎙️ Voice note transcription
+    // ============================
+    if (!fromMe && hasMedia && event.payload.media) {
+      const { mimetype, url } = event.payload.media;
+
+      if (mimetype && mimetype.startsWith('audio/') && url) {
+        this.logger.log(
+          `🎤 Incoming voice note from ${finalFrom} (${mimetype}) url=${url}`,
+        );
+
+        try {
+          // Use WAHA API service to download media (handles baseURL + API key)
+          const audioBuffer = await this.wahaApiService.downloadMedia(url);
+
+          // Clean up mime type: "audio/ogg; codecs=opus" -> "audio/ogg"
+          const cleanMime = mimetype.split(';')[0];
+
+          const transcript = await this.aiAgentService.transcribeAudio(
+            audioBuffer,
+            cleanMime,
+            // Optional translation:
+            // { translateTo: 'Indonesian' },
+          );
+
+          this.logger.log(
+            `📝 Voice note transcribed (${transcript.length} chars) for ${finalFrom}`,
+          );
+
+          // Use transcript as message body for storage + AI orchestration
+          textBody = transcript;
+        } catch (error: any) {
+          this.logger.error(
+            `❌ Failed to download/transcribe voice note from ${finalFrom}: ${
+              error?.message || error
+            }`,
+          );
+          // If it fails, we just fall back to original body (if any)
+        }
+      }
+    }
+
     // Skip saving group messages
     const isGroupMessage =
       (!fromMe && finalFrom?.includes('@g.us')) ||
@@ -252,7 +298,7 @@ export class WhatsappService {
       from: finalFrom,
       to: finalTo,
       fromMe,
-      body: body || '',
+      body: textBody,
       hasMedia,
       ...(hasMedia && event.payload.media && {
         mediaType: event.payload.media.mimetype,
@@ -267,7 +313,7 @@ export class WhatsappService {
       await this.messageOrchestratorService.processIncomingMessage(
         finalFrom,
         event.session,
-        { skipAiResponse: hasMedia },
+        { skipAiResponse: false },
       );
     }
   }
