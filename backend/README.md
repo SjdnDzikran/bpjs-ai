@@ -1,15 +1,15 @@
-# AI Car Inspection Customer Service - Backend
+# BPJS AI Care - Backend
 
-NestJS backend for the AI-powered WhatsApp customer service system for used car inspections.
+NestJS backend for the BPJS Kesehatan WhatsApp assistant. It receives WAHA webhooks, stores chats/customers, and uses Gemini to answer BPJS inquiries with escalation cues when a human agent is needed.
 
 ## Overview
 
 This backend handles:
 - WhatsApp message webhooks from WAHA
-- AI agent integration for customer conversations
-- Booking information collection and management
-- Payment processing coordination
-- Inspector notification system
+- AI agent responses for BPJS questions via Google Gemini
+- Chat + customer records with Prisma/PostgreSQL
+- Outbound WhatsApp messaging through WAHA API
+- Escalation markers when cases should be handed to a human
 
 ## Quick Start
 
@@ -27,10 +27,11 @@ cp .env.example .env
 
 Edit `.env` with your configuration:
 ```bash
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/car_inspection_ai"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/bpjs_ai_care"
 WAHA_WEBHOOK_SECRET=<generate-with-openssl-rand-hex-32>
 WAHA_API_URL=http://localhost:3000
 WAHA_API_KEY=127434fd3a9643f0bdc7440cb8a6ba4e
+GOOGLE_AI_API_KEY=<your-google-ai-api-key>
 ```
 
 ### 3. Set Up Database
@@ -46,7 +47,7 @@ npm run prisma:migrate
 npm run start:dev
 ```
 
-The backend will be available at `http://localhost:3001`
+The backend will be available at `http://localhost:3001` and API docs at `http://localhost:3001/docs`.
 
 ## WhatsApp Integration
 
@@ -81,22 +82,17 @@ See [WEBHOOK_QUICKSTART.md](./WEBHOOK_QUICKSTART.md) for detailed instructions.
 backend/
 ├── src/
 │   ├── modules/
-│   │   ├── whatsapp/          # WhatsApp webhook handling
-│   │   │   ├── interfaces/    # Type definitions for WAHA events
-│   │   │   ├── examples/      # Testing examples
-│   │   │   ├── whatsapp.controller.ts
-│   │   │   └── whatsapp.service.ts
-│   │   ├── ai-agent/          # AI conversation handling (TODO)
-│   │   ├── booking/           # Booking management (TODO)
-│   │   ├── payment/           # Payment processing (TODO)
-│   │   └── inspector/         # Inspector coordination (TODO)
-│   ├── prisma/                # Database client
-│   └── main.ts
+│   │   ├── ai/               # Gemini-powered BPJS assistant + escalation logic
+│   │   ├── chat/             # Chat sessions and history
+│   │   ├── customer/         # Customer records linked to chats
+│   │   └── whatsapp/         # WAHA webhook handling + outbound messaging
+│   ├── prisma/               # Database client
+│   └── main.ts               # App bootstrap + docs setup
 ├── prisma/
-│   ├── schema.prisma          # Database schema
-│   └── migrations/
+│   ├── schema.prisma         # Database schema
+│   └── migrations/           # Prisma migrations (if any)
 ├── scripts/
-│   └── setup-waha-session.sh # WAHA session setup script
+│   └── setup-waha-session.sh  # WAHA session setup script
 └── test/
 ```
 
@@ -161,13 +157,10 @@ See [examples](./src/modules/whatsapp/examples/webhook-testing.example.ts) for m
 
 ## Architecture
 
-Based on the implementation plan in `waha/plan.md`:
-
-- **Phase 1 (Current)**: Foundation - NestJS setup, database, WhatsApp webhooks ✅
-- **Phase 2 (Next)**: MCP tool implementation and code execution sandbox
-- **Phase 3**: Payment & inspector integration
-- **Phase 4**: Testing & refinement
-- **Phase 5**: Deployment & monitoring
+- WAHA delivers WhatsApp webhooks to `/webhooks/waha` (raw body preserved for HMAC verification).
+- Chat + customer entities are stored via Prisma (PostgreSQL).
+- Gemini (`AiAgentService`) generates BPJS-specific replies and flags answers that should be escalated.
+- Outbound messages are sent back to WAHA using the configured API URL and key.
 
 ## Environment Variables
 
@@ -175,17 +168,22 @@ Based on the implementation plan in `waha/plan.md`:
 |----------|-------------|---------|
 | `NODE_ENV` | Environment | `development` |
 | `PORT` | Server port | `3001` |
-| `DATABASE_URL` | PostgreSQL connection | `postgresql://...` |
+| `DATABASE_URL` | PostgreSQL connection | `postgresql://.../bpjs_ai_care` |
 | `WAHA_WEBHOOK_SECRET` | HMAC secret for webhooks | `<generated-secret>` |
 | `WAHA_API_URL` | WAHA API endpoint | `http://localhost:3000` |
 | `WAHA_API_KEY` | WAHA API key | `<your-api-key>` |
+| `GOOGLE_AI_API_KEY` | Google Gemini API key | `<your-ai-key>` |
 
 ## Resources
 
 - [NestJS Documentation](https://docs.nestjs.com)
 - [WAHA Documentation](https://waha.devlike.pro)
 - [Prisma Documentation](https://www.prisma.io/docs)
-- [Project Plan](../waha/plan.md)
+- [Webhook Quickstart](./WEBHOOK_QUICKSTART.md)
+- [Webhook Setup](./WEBHOOK_SETUP.md)
+- [Webhook Integration Summary](../WEBHOOK_INTEGRATION_SUMMARY.md)
+- [Chat History Guide](./CHAT_HISTORY_GUIDE.md)
+- [Swagger/Scalar Guide](./SWAGGER_GUIDE.md)
 
 ## License
 
