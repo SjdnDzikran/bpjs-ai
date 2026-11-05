@@ -47,7 +47,7 @@ Or manually:
 ```bash
 curl -X POST http://localhost:3000/api/sessions/ \
   -H "Content-Type: application/json" \
-  -H "X-Api-Key: 127434fd3a9643f0bdc7440cb8a6ba4e" \
+  -H "X-Api-Key: <your-waha-api-key>" \
   -d '{
     "name": "default"
   }'
@@ -161,15 +161,15 @@ grep WHATSAPP_HOOK_HMAC_KEY waha/.env
 
 ```bash
 # Check session status
-curl -H "X-Api-Key: 127434fd3a9643f0bdc7440cb8a6ba4e" \
+curl -H "X-Api-Key: <your-waha-api-key>" \
   http://localhost:3000/api/sessions/default
 
 # Get QR code if needed
-curl -H "X-Api-Key: 127434fd3a9643f0bdc7440cb8a6ba4e" \
+curl -H "X-Api-Key: <your-waha-api-key>" \
   http://localhost:3000/api/sessions/default/qr
 
 # Restart session
-curl -X POST -H "X-Api-Key: 127434fd3a9643f0bdc7440cb8a6ba4e" \
+curl -X POST -H "X-Api-Key: <your-waha-api-key>" \
   http://localhost:3000/api/sessions/default/restart
 ```
 
@@ -203,12 +203,12 @@ PORT=3001
 DATABASE_URL="postgresql://..."
 WAHA_WEBHOOK_SECRET=<secret>
 WAHA_API_URL=http://localhost:3000
-WAHA_API_KEY=127434fd3a9643f0bdc7440cb8a6ba4e
+WAHA_API_KEY=your-waha-api-key-here
 ```
 
 ### WAHA `.env`
 ```bash
-WAHA_API_KEY=127434fd3a9643f0bdc7440cb8a6ba4e
+WAHA_API_KEY=your-waha-api-key-here
 WHATSAPP_HOOK_URL=http://host.docker.internal:3001/webhooks/waha
 WHATSAPP_HOOK_EVENTS=session.status,message,message.any
 WHATSAPP_HOOK_HMAC_KEY=<secret>

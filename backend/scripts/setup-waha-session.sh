@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 WAHA_URL=${WAHA_URL:-"http://localhost:3000"}
-WAHA_API_KEY=${WAHA_API_KEY:-"127434fd3a9643f0bdc7440cb8a6ba4e"}
+WAHA_API_KEY=${WAHA_API_KEY:?"WAHA_API_KEY is required"}
 WEBHOOK_URL=${WEBHOOK_URL:-"http://host.docker.internal:3001/webhooks/waha"}
 WEBHOOK_SECRET=${WEBHOOK_SECRET:-""}
 SESSION_NAME=${SESSION_NAME:-"default"}

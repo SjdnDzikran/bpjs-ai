@@ -85,7 +85,7 @@ openssl rand -hex 32
 # 3. Add to .env
 WAHA_WEBHOOK_SECRET=<generated-secret>
 WAHA_API_URL=http://localhost:3000
-WAHA_API_KEY=127434fd3a9643f0bdc7440cb8a6ba4e
+WAHA_API_KEY=your-waha-api-key-here
 ```
 
 ### WAHA Configuration
@@ -215,7 +215,7 @@ grep WHATSAPP_HOOK_HMAC_KEY waha/.env
 ### Session Not Working
 ```bash
 # Check session status
-curl -H "X-Api-Key: 127434fd3a9643f0bdc7440cb8a6ba4e" \
+curl -H "X-Api-Key: <your-waha-api-key>" \
   http://localhost:3000/api/sessions/default
 ```
 
