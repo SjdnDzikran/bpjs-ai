@@ -30,7 +30,7 @@ Edit `.env` with your configuration:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/bpjs_ai_care"
 WAHA_WEBHOOK_SECRET=<generate-with-openssl-rand-hex-32>
 WAHA_API_URL=http://localhost:3000
-WAHA_API_KEY=127434fd3a9643f0bdc7440cb8a6ba4e
+WAHA_API_KEY=your-waha-api-key-here
 GOOGLE_AI_API_KEY=<your-google-ai-api-key>
 ```
 

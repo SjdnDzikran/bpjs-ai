@@ -26,7 +26,7 @@ openssl rand -hex 32
 # Add to .env
 WAHA_WEBHOOK_SECRET=your-generated-secret-here
 WAHA_API_URL=http://localhost:3000
-WAHA_API_KEY=127434fd3a9643f0bdc7440cb8a6ba4e  # Must match WAHA's API key
+WAHA_API_KEY=your-waha-api-key-here  # Must match WAHA's API key
 ```
 
 #### Start the Backend
@@ -71,7 +71,7 @@ When creating/starting a session via API:
 ```bash
 curl -X POST http://localhost:3000/api/sessions \
   -H "Content-Type: application/json" \
-  -H "X-Api-Key: 127434fd3a9643f0bdc7440cb8a6ba4e" \
+  -H "X-Api-Key: <your-waha-api-key>" \
   -d '{
     "name": "default",
     "config": {
