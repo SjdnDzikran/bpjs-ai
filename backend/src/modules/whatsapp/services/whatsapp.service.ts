@@ -354,12 +354,19 @@ export class WhatsappService {
     headers: WahaWebhookHeaders,
     rawBody?: Buffer,
   ): void {
-    const secret = this.configService.get<string>('WAHA_WEBHOOK_SECRET');
-    if (!secret) {
-      this.logger.warn(
-        'WAHA_WEBHOOK_SECRET not configured. Webhook signatures will not be verified!',
+    const secret = this.configService
+      .get<string>('WAHA_WEBHOOK_SECRET')
+      ?.trim();
+    // Reject a missing secret and the placeholder value shipped in .env.example,
+    // so a deployment that never generated one fails closed instead of accepting
+    // unauthenticated webhooks.
+    if (!secret || secret === 'your-secret-key-here') {
+      this.logger.error(
+        'WAHA_WEBHOOK_SECRET is not configured. Rejecting webhook: signature verification is required.',
       );
-      return;
+      throw new UnauthorizedException(
+        'Webhook signature verification is not configured',
+      );
     }
 
     if (!headers.signature || !rawBody) {
